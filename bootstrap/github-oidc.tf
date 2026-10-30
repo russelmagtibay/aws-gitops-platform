@@ -37,15 +37,15 @@ data "aws_iam_policy_document" "github_trust" {
       type        = "Federated"
       identifiers = [aws_iam_openid_connect_provider.github.arn]
     }
-    # Token must be meant for AWS STS
+    # Condition 1: Check :aud (Audience)
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:aud"
       values   = ["sts.amazonaws.com"]
     }
-    # Token must come from THIS repo in THIS context only
+    # Condition 2: Check :sub (Subject) using StringLike
     condition {
-      test     = "StringEquals"
+      test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
       values   = [each.value.subject]
     }

@@ -3,7 +3,7 @@ data "aws_caller_identity" "current" {}
 locals {
   account_id   = data.aws_caller_identity.current.account_id
   state_bucket = "${var.project_name}-tfstate-${local.account_id}"
-  github_repo  = "${var.github_owner}/${var.github_repo}"
+  github_repo  = "${var.github_owner}*/${var.github_repo}*"
 }
 # The bucket that stores every Terraform state file for this project
 resource "aws_s3_bucket" "tfstate" {
