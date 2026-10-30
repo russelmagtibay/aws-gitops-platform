@@ -4,12 +4,8 @@
 
 
 resource "aws_iam_openid_connect_provider" "github" {
-  url = "https://token.actions.githubusercontent.com"
+  url            = "https://token.actions.githubusercontent.com"
   client_id_list = ["sts.amazonaws.com"]
-
-  
-
-  
 }
 
 # ---------------------------------------------------------------
@@ -57,7 +53,7 @@ data "aws_iam_policy_document" "github_trust" {
 }
 
 resource "aws_iam_role" "github" {
-  for_each = local.github_roles
+  for_each             = local.github_roles
   name                 = "${var.project_name}-gha-${each.key}"
   description          = each.value.description
   assume_role_policy   = data.aws_iam_policy_document.github_trust[each.key].json
