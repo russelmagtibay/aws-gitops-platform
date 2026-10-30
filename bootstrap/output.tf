@@ -1,5 +1,5 @@
 output "aws_region" {
-  value = var.aws_region
+  value       = var.aws_region
   description = "Region where the project is deployed"
 }
 

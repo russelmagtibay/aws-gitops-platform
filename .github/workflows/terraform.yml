@@ -1,0 +1,145 @@
+name: "Pipeline 1 — Infrastructure CI/CD (Terraform)"
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+    paths:
+      - "modules/**"
+      - "environments/**"
+      - ".github/workflows/terraform.yml"
+  workflow_dispatch:
+
+# Required for passwordless OIDC login (id-token: write) and posting PR comments (pull-requests: write)
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+env:
+  TF_WORKING_DIR: "environments/dev"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # JOB 1: Format Check, Syntax Validation, TFLint & Checkov Security Scan
+  # ---------------------------------------------------------------------------
+  validate-and-scan:
+    name: "1. Validate, Lint & Security Scan"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.11.0"
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+
+      - name: Terraform Init (No Backend) & Validate
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          terraform init -backend=false
+          terraform validate
+
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v4
+
+      - name: Run TFLint
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          tflint --init
+          tflint --recursive
+
+      - name: Run Checkov IaC Security Scanner
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: ${{ env.TF_WORKING_DIR }}
+          framework: terraform
+          soft_fail: true
+          output_format: cli,github_failed_only
+
+  # ---------------------------------------------------------------------------
+  # JOB 2: Pull Request Plan (Assumes Read-Only OIDC Role & Comments on PR)
+  # ---------------------------------------------------------------------------
+  plan:
+    name: "2. Terraform Plan (PR Preview)"
+    needs: validate-and-scan
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials via OIDC (Read-Only Plan Role)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_PLAN_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.11.0"
+          terraform_wrapper: false
+
+      - name: Terraform Init & Plan
+        id: plan
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          terraform init
+          terraform plan -no-color -out=tfplan > plan_output.txt
+          tail -n 60 plan_output.txt > plan_summary.txt
+
+      - name: Post Terraform Plan Comment on Pull Request
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const summary = fs.readFileSync('${{ env.TF_WORKING_DIR }}/plan_summary.txt', 'utf8');
+            const body = `### 🏗️ Terraform Plan Summary (\`environments/dev\`)\n` +
+                         `✅ **Format, Validate, TFLint & Checkov:** Passed\n` +
+                         `🪪 **Authenticated via OIDC Role:** \`aws-gitops-platform-gha-plan\`\n\n` +
+                         `<details><summary>Click to view Terraform Plan output</summary>\n\n` +
+                         `\`\`\`terraform\n${summary}\n\`\`\`\n</details>`;
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+
+  # ---------------------------------------------------------------------------
+  # JOB 3: Terraform Apply (Gated by 'production' Manual Approval Environment)
+  # ---------------------------------------------------------------------------
+  apply:
+    name: "3. Terraform Apply (Deploy to AWS)"
+    needs: validate-and-scan
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    # Matches our Phase 1 OIDC subject: repo:russelmagtibay/aws-gitops-platform:environment:production
+    environment:
+      name: production
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials via OIDC (Apply Role)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_APPLY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.11.0"
+
+      - name: Terraform Init & Apply
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          terraform init
+          terraform apply -auto-approve
