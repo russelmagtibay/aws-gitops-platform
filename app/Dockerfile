@@ -11,15 +11,16 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
+# Copy application code AND the static website files
 COPY main.py test_main.py ./
+COPY static/ ./static/
 
 # Security Best Practice: Create and switch to a non-root user
 RUN useradd --create-home --shell /bin/bash appuser && \
     chown -R appuser:appuser /app
 USER appuser
 
-# Expose unprivileged port 8000 (matches modules/security and modules/alb!)
+# Expose unprivileged port 8000
 EXPOSE 8000
 
 # Container healthcheck

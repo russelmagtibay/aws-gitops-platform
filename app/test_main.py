@@ -4,22 +4,24 @@ from main import app
 client = TestClient(app)
 
 
-def test_root_endpoint():
+def test_homepage_serves_html():
+    """Tests that root / returns 200 OK and contains Ebook HTML."""
     response = client.get("/")
     assert response.status_code == 200
-    data = response.json()
-    assert data["service"] == "aws-gitops-platform-api"
-    assert data["status"] == "online"
-    assert "container_hostname" in data
+    assert "Ebook" in response.text or "<!doctype html>" in response.text.lower()
 
 
 def test_health_endpoint():
+    """Tests that AWS ALB health check responds 200 healthy."""
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json() == {"status": "healthy"}
 
 
-def test_dashboard_endpoint():
-    response = client.get("/dashboard")
+def test_api_info_endpoint():
+    """Tests that API info returns JSON with container hostname."""
+    response = client.get("/api/info")
     assert response.status_code == 200
-    assert "Russel Magtibay" in response.text
+    data = response.json()
+    assert data["service"] == "aws-gitops-platform-ebook"
+    assert "container_hostname" in data
