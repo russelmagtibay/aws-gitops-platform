@@ -25,3 +25,13 @@ def test_api_info_endpoint():
     data = response.json()
     assert data["service"] == "aws-gitops-platform-ebook"
     assert "container_hostname" in data
+
+
+def test_leads_endpoint():
+    """Tests that POST /leads validates and accepts a client ebook request."""
+    response = client.post(
+        "/leads",
+        json={"name": "Russel Test", "email": "test@example.com", "message": "Requested ebook download"},
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "success"

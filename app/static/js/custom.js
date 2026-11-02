@@ -32,7 +32,7 @@
     // LEAD CAPTURE FORM SUBMISSION
     // Sends lead data to API Gateway -> Lambda -> DynamoDB + SES
     // =====================================================
-    var API_URL = "https://vy9tzepi9f.execute-api.ap-southeast-1.amazonaws.com/leads";
+    var API_URL = "/leads";
 
     $('#lead-capture-form').on('submit', function(e) {
       e.preventDefault(); // Stop the form from doing a normal page reload
