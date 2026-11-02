@@ -37,10 +37,39 @@ resource "aws_iam_role_policy_attachment" "execution_standard" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-# 5. Task Role (used by your Python app code itself if it calls AWS APIs)
+# 5. Task Role (used by your Python app code to write to DynamoDB & publish to SNS)
 resource "aws_iam_role" "task" {
   name               = "${var.project_name}-app-task-role"
   assume_role_policy = data.aws_iam_policy_document.ecs_task_assume.json
+}
+
+data "aws_iam_policy_document" "task_permissions" {
+  statement {
+    sid       = "AllowPutLeadIntoDynamoDB"
+    effect    = "Allow"
+    actions   = ["dynamodb:PutItem", "dynamodb:GetItem", "dynamodb:Scan"]
+    resources = [var.dynamodb_table_arn]
+  }
+
+  statement {
+    sid       = "AllowPublishLeadAlertToSNS"
+    effect    = "Allow"
+    actions   = ["sns:Publish"]
+    resources = [var.sns_topic_arn]
+  }
+
+  statement {
+    sid       = "AllowKMSForEncryptedSNSTopic"
+    effect    = "Allow"
+    actions   = ["kms:GenerateDataKey*", "kms:Decrypt"]
+    resources = ["*"]
+  }
+}
+
+resource "aws_iam_role_policy" "task_permissions" {
+  name   = "${var.project_name}-app-task-policy"
+  role   = aws_iam_role.task.id
+  policy = data.aws_iam_policy_document.task_permissions.json
 }
 
 # 6. ECS Task Definition (256 CPU = 0.25 vCPU, 512 MB RAM)
@@ -64,6 +93,20 @@ resource "aws_ecs_task_definition" "app" {
       command = [
         "sh", "-c",
         "mkdir -p /srv && echo ok > /srv/health && cd /srv && python -m http.server 8000"
+      ]
+      environment = [
+        {
+          name  = "AWS_REGION"
+          value = var.aws_region
+        },
+        {
+          name  = "DYNAMODB_TABLE_NAME"
+          value = var.dynamodb_table_name
+        },
+        {
+          name  = "SNS_TOPIC_ARN"
+          value = var.sns_topic_arn
+        }
       ]
       portMappings = [
         {

@@ -64,3 +64,18 @@ variable "container_port" {
     error_message = "container_port must be an unprivileged port between 1024 and 65535."
   }
 }
+
+variable "dynamodb_table_name" {
+  description = "Name of the DynamoDB table for storing ebook leads"
+  type        = string
+}
+
+variable "dynamodb_table_arn" {
+  description = "ARN of the DynamoDB table for IAM least-privilege policy"
+  type        = string
+}
+
+variable "sns_topic_arn" {
+  description = "ARN of the SNS topic for sending ebook lead email notifications"
+  type        = string
+}

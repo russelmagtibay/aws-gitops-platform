@@ -26,17 +26,26 @@ module "ecr" {
   project_name = var.project_name
 }
 
-# 5. Build the ECS Fargate Cluster & 2 Containers inside the Private Subnets
-module "ecs" {
-  source             = "../../modules/ecs"
-  project_name       = var.project_name
-  aws_region         = var.aws_region
-  private_subnet_ids = module.vpc.private_subnet_ids
-  ecs_tasks_sg_id    = module.security.ecs_tasks_sg_id
-  target_group_arn   = module.alb.target_group_arn
+# 5. Build the Serverless DynamoDB Table for Ebook Leads
+module "dynamodb" {
+  source       = "../../modules/dynamodb"
+  project_name = var.project_name
 }
 
-# 6. Build the CloudWatch Alarms, SNS Email Alerts & $10 Monthly Budget
+# 6. Build the ECS Fargate Cluster & 2 Containers inside the Private Subnets
+module "ecs" {
+  source              = "../../modules/ecs"
+  project_name        = var.project_name
+  aws_region          = var.aws_region
+  private_subnet_ids  = module.vpc.private_subnet_ids
+  ecs_tasks_sg_id     = module.security.ecs_tasks_sg_id
+  target_group_arn    = module.alb.target_group_arn
+  dynamodb_table_name = module.dynamodb.table_name
+  dynamodb_table_arn  = module.dynamodb.table_arn
+  sns_topic_arn       = module.monitoring.sns_topic_arn
+}
+
+# 7. Build the CloudWatch Alarms, SNS Email Alerts & $10 Monthly Budget
 module "monitoring" {
   source         = "../../modules/monitoring"
   project_name   = var.project_name
